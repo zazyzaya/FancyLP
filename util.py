@@ -16,3 +16,6 @@ def tr_va_te(samples, tr=0.85,va=0.05,te=0.10):
     te_mask[perm[va_idx:]] = True 
 
     return tr_mask, va_mask, te_mask 
+
+def negative_edges(num_nodes, samples): 
+    return torch.randint(0, num_nodes, (2,samples))
