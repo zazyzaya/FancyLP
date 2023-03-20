@@ -7,22 +7,21 @@ import pandas as pd
 from sklearn.metrics import roc_auc_score, average_precision_score as ap_score
 import torch
 from torch.optim import Adam 
-from torch_geometric.datasets import CoraFull, Planetoid, WebKB
 
 from models import *
-from util import tr_va_te, negative_edges, load_chameleon
+from util import tr_va_te, negative_edges
+from dataloaders import load_dataset
 
-PYG_DATA = '/home/ead/iking5/data/pyg/'
 ORIG_PARAMS = SimpleNamespace(
     hidden=32, layers=2, 
     lr=0.01, epochs=200, 
     patience=200
 )
 
-HYPERPARAMS = SimpleNamespace(
+SLOW_PARAMS = SimpleNamespace(
     hidden=32, layers=2, 
     lr=5e-5, epochs=5000, 
-    patience=150
+    patience=200
 )
 torch.set_num_threads(16)
 
@@ -94,22 +93,8 @@ def eval(model, data, to_test, hp, verbose=False):
 
     return ret 
 
-TXT_TO_DATA = {
-    'cora': (Planetoid, (PYG_DATA, 'Cora')),
-    'citeseer': (Planetoid, (PYG_DATA, 'CiteSeer')),
-    'pubmed': (Planetoid, (PYG_DATA, 'PubMed')),
-    'chameleon': (load_chameleon, ()),
-    'cornell': (WebKB, (PYG_DATA, 'Cornell')),
-    'texas': (WebKB, (PYG_DATA, 'Texas')),
-    'wisconsin': (WebKB, (PYG_DATA, 'Wisconsin'))
-}
 def one_test(hp, ModelConstructor, dataset):
-    constructor,args = TXT_TO_DATA[dataset]
-    data = constructor(*args)
-
-    if dataset != 'chameleon':
-        data = data.data 
-
+    data = load_dataset(dataset)
     tr,va,te = tr_va_te(data.edge_index.size(1))
     data.tr_mask = tr; data.va_mask = va; data.te_mask = te 
 
@@ -118,10 +103,12 @@ def one_test(hp, ModelConstructor, dataset):
     train(model, data, hp)
     return eval(model, data, data.te_mask, hp, verbose=True)
 
-def main(dataset_str):
+def main(dataset_str, slow=False):
+    hp = ORIG_PARAMS if not slow else SLOW_PARAMS
+
     outf = f'results/{dataset_str}.txt'
     for model in [GAE, CattedLayers_Dot, GAE_HadamardMLP, CattedLayers_HadamardMLP, GAE_DeepHadamard, CattedLayers_DeepHadamard]:
-        stats = pd.DataFrame([one_test(ORIG_PARAMS, model, dataset_str) for _ in range(10)])
+        stats = pd.DataFrame([one_test(hp, model, dataset_str) for _ in range(10)])
         print(stats.mean())
 
         with open(outf, 'a') as f:
@@ -132,4 +119,4 @@ def main(dataset_str):
 
 
 if __name__ == '__main__':
-    main(sys.argv[1])
+    main(sys.argv[1], slow=True)
